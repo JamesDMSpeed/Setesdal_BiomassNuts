@@ -10,11 +10,13 @@ setesdal_prsplant<-read.csv("data/combined_wide_dataset.csv",header=TRUE)
 
 #Correlation matrices
 #Between and within groups of variables
+
 #Create subgroups of variables by type
 names(setesdal_prsplant)
-biomass_list<-setesdal_prsplant[,5:19]
-plantnut_list<-setesdal_prsplant[,21:88]
-prs_list<-setesdal_prsplant[,89:103]
+biomass_list<-setesdal_prsplant[,4:18]
+plantnut_list<-setesdal_prsplant[,19:86]
+prs_list<-setesdal_prsplant[,88:102]
+
 #Subgroups by plant group
 herb_list<-setesdal_prsplant %>%  select(matches("herb", ignore.case = TRUE))
 graminoid_list<-setesdal_prsplant %>%  select(matches("graminoid", ignore.case = TRUE))
@@ -160,3 +162,8 @@ pheatmap(cor_PRS,
          clustering_distance_rows = as.dist(1 - cor_PRS),
          clustering_distance_cols = as.dist(1 - cor_PRS)
 )
+pheatmap(cor_Gram)
+pheatmap(cor_Herb)
+pheatmap(cor_Shrub)
+pheatmap(cor_Litter)
+

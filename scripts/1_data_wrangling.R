@@ -217,7 +217,7 @@ ggplot(data=prs_wide,aes(x=PRS_Ca,y=PRS_Cu,color=TreatmentID))+geom_point()+them
 #Plant data
 setesdal_plantdat<-
   full_join(biomass_wide_plot,plantnut_wide,
-            by="MainPlotID")
+            by=c("MainPlotID","TreatmentID"))
 
 #Plant data and PRS 
 setesdal_prsplant<-setesdal_plantdat %>%
