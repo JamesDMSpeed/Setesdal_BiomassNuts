@@ -33,10 +33,13 @@ biomass_long<-pivot_longer(
                 values_to = "Biomass")
 
 #Biomass
-ggplot(data=biomass_dat,aes(y=Graminoids,x = TreatmentID))+geom_boxplot()+facet_wrap(~Date)+theme_bw()
+ggplot(data=biomass_dat,aes(y=Litter_Bio,x = as.factor(Date)))+geom_boxplot()+facet_wrap(~TreatmentID)+theme_bw()
 
 ggplot(data=biomass_long[biomass_long$Fraction!="TotalBiomass" & biomass_long$Fraction!="Litter_Bio",],aes(x=Date,y=Biomass,fill=Fraction))+
+  geom_bar(stat = "summary", fun = "mean")+facet_wrap(~TreatmentID)+theme_bw()+ylab("Biomass (g)")
+ggplot(data=biomass_long[biomass_long$Fraction!="TotalBiomass"  ,],aes(x=Date,y=Biomass,fill=Fraction))+
   geom_bar(stat = "summary", fun = "mean")+facet_wrap(~TreatmentID)+theme_bw()
+
 
 #Biomass proportion regrowth
 biomass_regrowth <- biomass_long %>%
@@ -46,12 +49,23 @@ biomass_regrowth <- biomass_long %>%
     values_from = Biomass
   ) %>%
   mutate(
-    August_regrowth = Aug / (Jun+0.0000001)#Add small amount to avoid div0
+    August_regrowth = ifelse(Jun == 0 | is.na(Jun),
+                             NA,
+                             Aug / Jun) #Regrowth is NA if June biomass is 0
   )
 
 biomass_wide<-biomass_regrowth %>%
   pivot_wider(values_from = c(Jun,Aug, August_regrowth),
               names_from = Fraction)
+
+#Main plot average
+biomass_wide_plot<-biomass_wide %>% 
+  group_by(MainPlotID,TreatmentID) %>%
+  summarise(
+    across(where(is.numeric), \(x) mean(x, na.rm = TRUE)),
+    .groups = "drop"
+  )
+
 
 
 ggplot(data=biomass_regrowth[biomass_regrowth$Fraction!="TotalBiomass" & biomass_regrowth$Fraction!="Litter_Bio",]
@@ -61,8 +75,9 @@ ggplot(data=biomass_regrowth[biomass_regrowth$Fraction!="TotalBiomass" & biomass
     stat = "summary",
     fun.data = mean_se,
     width = 0.2,
-    position = position_dodge(width = 0.9)
-  ) 
+    position = position_dodge(width = 0.9))+
+  geom_hline(yintercept=1,lty=2)    
+   
 
 
 
@@ -88,42 +103,77 @@ summary(as.factor(plantnut_dat$TreatmentID))
 summary(as.factor(plantnut_dat$MainPlotID))
 summary(as.factor(plantnut_dat$PlotID))
 
-#Some plant nutrient data has multiple rows per plot|fraction where biomass was split between bags
-#And also some subplots were pooled when biomass was too low.
-summary(as.factor(plantnut_dat$Notes))
+# #Some plant nutrient data has multiple rows per plot|fraction where biomass was split between bags
+# #And also some subplots were pooled when biomass was too low.
+#Therefore we average out at site (mainplot ID)
 
-#Some vegetation fractions are missing from some plots. We fill these in with NAs
-plot_ids <- unique(biomass_dat$PlotID)
-fractions <- unique(plantnut_dat$`Plant-species`)
-#Valid combinations
-template <- tidyr::crossing(
-  PlotID = plot_ids,
-  `Plant-species` = fractions
-)
-plantnut_dat_full <- template %>%
-  left_join(plantnut_dat, by = c("PlotID", "Plant-species"))
+plantnut_plotlevel<-plantnut_dat %>%
+  group_by(MainPlotID,TreatmentID,`Plant-species`) %>%
+  summarise(
+    across(where(is.numeric), \(x) mean(x, na.rm = TRUE)),
+    .groups = "drop"
+  )
+dim(plantnut_plotlevel)#15 plots, 4 fractions = 60
+
+# summary(as.factor(plantnut_dat$Notes))
+# 
+# #All plots
+# plot_meta <- biomass_dat %>%
+#   distinct(PlotID, TreatmentID)
+# 
+# # Species levels
+# fractions <- unique(plantnut_dat$`Plant-species`)
+# 
+# # Template
+# template <- crossing(
+#   plot_meta,
+#  Fraction = fractions
+# )
+# # Join nutrient data
+# plantnut_dat_full <- template %>%
+#   left_join(plantnut_dat,
+#             by = c(
+#               "PlotID",
+#               "Fraction",
+#               "TreatmentID"))
+# dim(plantnut_dat_full)#45 plots * 4 fractions = 180
+
+
+
 
 plantnut_long<-pivot_longer(
-  plantnut_dat_full,
+  plantnut_plotlevel,
   cols=c("TotC (%)","TotN (%)", "TotH (%)","CN", "B (mg/kg)", "Na (g/kg)", "Mg (g/kg)",  "Al (g/kg)","P (g/kg)", "S (g/kg)", "K (g/kg)","Ca (g/kg)", "Mn (g/kg)",
          "Fe (g/kg)" ,"Cu (mg/kg)", "Zn (g/kg)", "Mo (mg/kg)" ),
   names_to="Nutrient",
   values_to="Value")
+dim(plantnut_long) #17 nutrients, 15 plots, 4 fractions =1020
+
+summary(plantnut_long$Value)#26 NA values in nutrients
+length(plantnut_long$Value[!is.na(plantnut_long$Value)])#994 non NAs
 
 plantnut_wide<-pivot_wider(
-  plantnut_dat,
-  id_cols = c(PlotID,Site_id,MainPlotID),
+  plantnut_plotlevel,
+  id_cols = c(MainPlotID,TreatmentID),
   names_from =`Plant-species`,
   values_from = c("TotC (%)","TotN (%)", "TotH (%)","CN", "B (mg/kg)", "Na (g/kg)", "Mg (g/kg)",  "Al (g/kg)","P (g/kg)", "S (g/kg)", "K (g/kg)","Ca (g/kg)", "Mn (g/kg)",
                   "Fe (g/kg)" ,"Cu (mg/kg)", "Zn (g/kg)", "Mo (mg/kg)" )
 )
-dim(plantnut_dat_full)
 dim(plantnut_wide)
-summary(as.factor(plantnut_wide$PlotID))
+summary(as.factor(plantnut_wide$MainPlotID))
 
 #Nutrients
-ggplot(data=plantnut_long,aes(y=Value,x=TreatmentID))+geom_boxplot()+facet_wrap(~Nutrient,scales="free_y")+theme_bw()
-ggplot(data=plantnut_dat,aes(x = `Ca (g/kg)`, y = `Cu (mg/kg)`,color = TreatmentID))+geom_point()+theme_bw()+scale_x_sqrt()+scale_y_sqrt()
+ggplot(data=plantnut_long,aes(y=Value,x=TreatmentID,color=`Plant-species`))+
+  geom_boxplot()+
+  facet_grid(rows=vars(Nutrient),cols=vars(`Plant-species`),scales="free_y")+
+  theme_bw()+theme(axis.text.x = element_text(angle=45,vjust=0.5))
+#ggplot(data=plantnut_long,aes(y=Value,x=Nutrient,color=`Plant-species`))+geom_boxplot()+facet_grid(rows=vars(TreatmentID),cols=vars(`Plant-species`),scales="free_y")+theme_bw()+theme(axis.text.x = element_text(angle=45,vjust=0.5))
+
+
+ggplot(data=plantnut_plotlevel,aes(x = `Ca (g/kg)`, y = `Cu (mg/kg)`,color = TreatmentID))+geom_point()+theme_bw()+scale_x_sqrt()+scale_y_sqrt()
+
+
+
 
 
 
@@ -153,40 +203,25 @@ prs_dat$Nutrient<-paste("PRS",prs_dat$nut,sep="_")
 prs_wide<-prs_dat %>%
   pivot_wider(names_from = Nutrient,
               values_from = val,
-              id_cols=c("PlotID","TreatmentID"))
+              id_cols=c("MainPlotID","PlotID","TreatmentID"))
 
 #PRS
-ggplot(data=prs_dat,aes(y=val,x=TreatmentID))+geom_boxplot()+facet_wrap(~nut,scales="free_y")+theme_bw()+ggtitle("PRS data")
+ggplot(data=prs_dat,aes(y=val,x=TreatmentID))+geom_boxplot()+facet_wrap(~nut,scales="free_y",nrow=3)+theme_bw()+ggtitle("PRS data")+theme(axis.text.x = element_text(angle=45,vjust=0.5))
 ggplot(data=prs_wide,aes(x=PRS_Ca,y=PRS_Cu,color=TreatmentID))+geom_point()+theme_bw()+scale_x_log10()+scale_y_log10()
 
 
 ########################################
 #######################################
 #Join together all wide datasets
-#Note that PRS data only for a subset of plots
 
-#PlantDataonly
-setesdal_plantdat<-biomass_wide %>%
-  full_join(plantnut_wide)
+#Plant data
+setesdal_plantdat<-
+  full_join(biomass_wide_plot,plantnut_wide,
+            by="MainPlotID")
 
-ggplot(data=setesdal_plantdat,aes(x=Jun_Herbs,y=`TotN (%)_Herbs`))+geom_point()+scale_x_log10()+scale_y_log10()+theme_bw()+geom_smooth(method="lm")
-ggplot(data=setesdal_plantdat,aes(x=CN_Graminoids,y=August_regrowth_Graminoids))+geom_point(data=setesdal_plantdat,aes(color=TreatmentID))+
-  scale_x_log10()+scale_y_log10()+geom_smooth(method="lm")+theme_bw()
-
-#Plant data and PRS (only for a subset of plots)
+#Plant data and PRS 
 setesdal_prsplant<-setesdal_plantdat %>%
   full_join(prs_wide)
 View(setesdal_prsplant)
 write.csv(setesdal_prsplant,"data/combined_wide_dataset.csv")
 
-#Averae at "main plot" level
-setesdal_avg <- setesdal_prsplant %>%
-  group_by(MainPlotID,TreatmentID) %>%
-  summarise(
-    across(
-      where(is.numeric),
-      \(x) if(all(is.na(x))) NA else mean(x, na.rm = TRUE)
-    ),
-    .groups = "drop"
-  )
-write.csv(setesdal_avg,"data/combined_plotnmean_wide_dataset.csv")
