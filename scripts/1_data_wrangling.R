@@ -5,6 +5,7 @@ library(ggplot2)
 library(tidyr)
 library(readxl)
 library(dplyr)
+library(vegan)
 
 
 #Biomass data
@@ -82,6 +83,40 @@ ggplot(data=biomass_regrowth[biomass_regrowth$Fraction!="TotalBiomass" & biomass
 
 
 ########################################
+#Plant point intercept (and diversity) data
+
+plantdat<-read_xlsx('data/pointI_2025.xlsx')
+#NAs in species columns are zeros
+plantdat <- plantdat %>% 
+  mutate(
+    across(
+      "Agrostis cappilaris":"Litter",
+      ~replace(., is.na(.), 0)
+    ))
+#Treatment and plot ID columns
+plantdat<-plantdat %>% 
+  mutate( 
+    Treatment = if_else(Grazing == 1, "G", "NG"),
+    Type = case_when(
+      startsWith(Site, "I") ~ "Island",
+      startsWith(Site, "M") ~ "Mainland",
+      TRUE ~ NA_character_
+    ))
+
+#Add a column for plot ID
+plantdat$PlotID<-paste(plantdat$Site,plantdat$Type,plantdat$Treatment,plantdat$Plot,sep="_")
+#Add a column forMain plot ID
+plantdat$MainPlotID<-paste(plantdat$Site,plantdat$Type,plantdat$Treatment,sep="_")
+
+#Add treatmentID
+plantdat$TreatmentID<-paste(plantdat$Type,plantdat$Treatment,sep="_")
+plantdat$TreatmentID<-factor(plantdat$TreatmentID,levels=c("Mainland_G", "Mainland_NG","Island_NG"))
+
+#Add species richness and diversity columns
+plantdat$species_richness<-specnumber(plantdat[,5:65])
+plantdat$shannon<-diversity(plantdat[,5:65],"shannon")
+
+
 #######################################
 
 #Nutrient data
@@ -114,32 +149,6 @@ plantnut_plotlevel<-plantnut_dat %>%
     .groups = "drop"
   )
 dim(plantnut_plotlevel)#15 plots, 4 fractions = 60
-
-# summary(as.factor(plantnut_dat$Notes))
-# 
-# #All plots
-# plot_meta <- biomass_dat %>%
-#   distinct(PlotID, TreatmentID)
-# 
-# # Species levels
-# fractions <- unique(plantnut_dat$`Plant-species`)
-# 
-# # Template
-# template <- crossing(
-#   plot_meta,
-#  Fraction = fractions
-# )
-# # Join nutrient data
-# plantnut_dat_full <- template %>%
-#   left_join(plantnut_dat,
-#             by = c(
-#               "PlotID",
-#               "Fraction",
-#               "TreatmentID"))
-# dim(plantnut_dat_full)#45 plots * 4 fractions = 180
-
-
-
 
 plantnut_long<-pivot_longer(
   plantnut_plotlevel,
