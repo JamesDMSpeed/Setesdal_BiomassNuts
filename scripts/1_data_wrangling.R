@@ -116,6 +116,22 @@ plantdat$TreatmentID<-factor(plantdat$TreatmentID,levels=c("Mainland_G", "Mainla
 plantdat$species_richness<-specnumber(plantdat[,5:65])
 plantdat$shannon<-diversity(plantdat[,5:65],"shannon")
 
+#Filter out empty columns
+plantdat <- plantdat %>%
+  select(
+    where(~ !is.numeric(.) || sum(., na.rm = TRUE) != 0)
+  )
+
+plantPI_plotlevel<-plantdat %>%
+  group_by(MainPlotID,TreatmentID) %>%
+  summarise(
+    across(where(is.numeric), \(x) mean(x, na.rm = TRUE)),
+    .groups = "drop"
+  )
+dim(plantPI_plotlevel)#15 plots
+
+ggplot(data=plantPI_plotlevel,aes(x=TreatmentID,y=species_richness))+geom_boxplot()+theme_bw()
+ggplot(data=plantPI_plotlevel,aes(x=TreatmentID,y=shannon))+geom_boxplot()+theme_bw()
 
 #######################################
 
@@ -130,7 +146,12 @@ plantnut_dat$MainPlotID<-paste(plantnut_dat$Site_id,plantnut_dat$Treatment,plant
 #Add treatmentID
 plantnut_dat$TreatmentID<-paste(plantnut_dat$Treatment,plantnut_dat$`G/NG`,sep="_")
 plantnut_dat$TreatmentID<-factor(plantnut_dat$TreatmentID,levels=c("Mainland_G", "Mainland_NG","Island_NG"))
+
+#CN, CP and NP
 plantnut_dat$CN <- plantnut_dat$`TotC (%)`/plantnut_dat$`TotN (%)`
+plantnut_dat$CP <- plantnut_dat$`TotC (%)`/(plantnut_dat$`P (g/kg)`/10) #scaled to %
+plantnut_dat$NP <- plantnut_dat$`TotN (%)`/(plantnut_dat$`P (g/kg)`/10)
+
 summary(plantnut_dat)
 
 summary(as.factor(plantnut_dat$Site_id))
@@ -152,7 +173,7 @@ dim(plantnut_plotlevel)#15 plots, 4 fractions = 60
 
 plantnut_long<-pivot_longer(
   plantnut_plotlevel,
-  cols=c("TotC (%)","TotN (%)", "TotH (%)","CN", "B (mg/kg)", "Na (g/kg)", "Mg (g/kg)",  "Al (g/kg)","P (g/kg)", "S (g/kg)", "K (g/kg)","Ca (g/kg)", "Mn (g/kg)",
+  cols=c("TotC (%)","TotN (%)", "TotH (%)","CN","CP","NP", "B (mg/kg)", "Na (g/kg)", "Mg (g/kg)",  "Al (g/kg)","P (g/kg)", "S (g/kg)", "K (g/kg)","Ca (g/kg)", "Mn (g/kg)",
          "Fe (g/kg)" ,"Cu (mg/kg)", "Zn (g/kg)", "Mo (mg/kg)" ),
   names_to="Nutrient",
   values_to="Value")
@@ -165,7 +186,7 @@ plantnut_wide<-pivot_wider(
   plantnut_plotlevel,
   id_cols = c(MainPlotID,TreatmentID),
   names_from =`Plant-species`,
-  values_from = c("TotC (%)","TotN (%)", "TotH (%)","CN", "B (mg/kg)", "Na (g/kg)", "Mg (g/kg)",  "Al (g/kg)","P (g/kg)", "S (g/kg)", "K (g/kg)","Ca (g/kg)", "Mn (g/kg)",
+  values_from = c("TotC (%)","TotN (%)", "TotH (%)","CN","CP", "NP","B (mg/kg)", "Na (g/kg)", "Mg (g/kg)",  "Al (g/kg)","P (g/kg)", "S (g/kg)", "K (g/kg)","Ca (g/kg)", "Mn (g/kg)",
                   "Fe (g/kg)" ,"Cu (mg/kg)", "Zn (g/kg)", "Mo (mg/kg)" )
 )
 dim(plantnut_wide)
@@ -175,7 +196,8 @@ summary(as.factor(plantnut_wide$MainPlotID))
 ggplot(data=plantnut_long,aes(y=Value,x=TreatmentID,color=`Plant-species`))+
   geom_boxplot()+
   facet_grid(rows=vars(Nutrient),cols=vars(`Plant-species`),scales="free_y")+
-  theme_bw()+theme(axis.text.x = element_text(angle=45,vjust=0.5))
+  theme_bw()+theme(axis.text.x = element_text(angle=45,vjust=0.5),
+                   strip.text.y = element_text(angle = 0))
 #ggplot(data=plantnut_long,aes(y=Value,x=Nutrient,color=`Plant-species`))+geom_boxplot()+facet_grid(rows=vars(TreatmentID),cols=vars(`Plant-species`),scales="free_y")+theme_bw()+theme(axis.text.x = element_text(angle=45,vjust=0.5))
 
 
@@ -224,13 +246,19 @@ ggplot(data=prs_wide,aes(x=PRS_Ca,y=PRS_Cu,color=TreatmentID))+geom_point()+them
 #Join together all wide datasets
 
 #Plant data
+setesdal_plantbiomcom<-
+  full_join(biomass_wide_plot,plantPI_plotlevel,
+            by=c("MainPlotID","TreatmentID"))
+
+#Plant and plant nutrients
 setesdal_plantdat<-
-  full_join(biomass_wide_plot,plantnut_wide,
+  full_join(setesdal_plantbiomcom,plantnut_wide,
             by=c("MainPlotID","TreatmentID"))
 
 #Plant data and PRS 
 setesdal_prsplant<-setesdal_plantdat %>%
-  full_join(prs_wide)
+  full_join(prs_wide,
+            by = join_by(MainPlotID, TreatmentID))
 View(setesdal_prsplant)
 write.csv(setesdal_prsplant,"data/combined_wide_dataset.csv")
 

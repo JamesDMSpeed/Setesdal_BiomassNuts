@@ -3,6 +3,7 @@ rm(list=ls())
 library(tidyr)
 library(dplyr)
 library(ggplot2)
+library(pheatmap)
 
 
 #Load data
@@ -14,8 +15,9 @@ setesdal_prsplant<-read.csv("data/combined_wide_dataset.csv",header=TRUE)
 #Create subgroups of variables by type
 names(setesdal_prsplant)
 biomass_list<-setesdal_prsplant[,4:18]
-plantnut_list<-setesdal_prsplant[,19:86]
-prs_list<-setesdal_prsplant[,88:102]
+pointint_list<-setesdal_prsplant[,21:60]
+plantnut_list<-setesdal_prsplant[,61:136]
+prs_list<-setesdal_prsplant[,138:152]
 
 #Subgroups by plant group
 herb_list<-setesdal_prsplant %>%  select(matches("herb", ignore.case = TRUE))
@@ -26,10 +28,17 @@ litter_list<-setesdal_prsplant %>%  select(matches("litter", ignore.case = TRUE)
 
 #Correlations Within variable groups
 cor_Biomass <- cor(biomass_list, use = "pairwise.complete.obs")
+cor_Community<-cor(pointint_list,use="pairwise.complete.obs")
 cor_Nuts <- cor(plantnut_list, use = "pairwise.complete.obs")
 cor_PRS <- cor(prs_list, use = "pairwise.complete.obs")
 
 cor_Biomass_df <- cor_Biomass %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Var1") %>%
+  pivot_longer(-Var1, names_to = "Var2", values_to = "correlation")%>%
+  filter(as.numeric(factor(Var1)) <= as.numeric(factor(Var2)))
+
+cor_Community_df <- cor_Community %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Var1") %>%
   pivot_longer(-Var1, names_to = "Var2", values_to = "correlation")%>%
@@ -49,6 +58,12 @@ cor_PRS_df <- cor_PRS %>%
 
 ggplot(cor_Biomass_df, aes(x = Var2, y = Var1, fill = correlation)) +
   geom_tile() + labs(x = NULL, y = NULL)+
+  scale_fill_gradient2() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(cor_Community_df, aes(x = Var2, y = Var1, fill = correlation)) +
+  geom_tile()+ labs(x = NULL, y = NULL) +
   scale_fill_gradient2() +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
@@ -155,8 +170,9 @@ ggplot(cor_Litter_df, aes(x = Var2, y = Var1, fill = correlation)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 
-library(pheatmap)
+
 pheatmap(cor_Biomass)
+pheatmap(cor_Community)
 pheatmap(cor_Nuts)
 pheatmap(cor_PRS,
          clustering_distance_rows = as.dist(1 - cor_PRS),
