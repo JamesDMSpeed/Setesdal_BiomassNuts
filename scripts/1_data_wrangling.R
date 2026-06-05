@@ -25,7 +25,11 @@ biomass_dat<-biomass_dat%>%
 
 biomass_dat$Month<-format(as.Date(biomass_dat$Date),"%b")
 
-
+#Convert from biomass per plot (0.5*0.5m) to m2
+biomass_dat$Litter_Bio<-biomass_dat$Litter_Bio*4
+biomass_dat$Graminoids<-biomass_dat$Graminoids*4
+biomass_dat$Herbs<-biomass_dat$Herbs*4
+biomass_dat$Dwarf_Shrub<-biomass_dat$Dwarf_Shrub*4
 
 biomass_long<-pivot_longer(
   biomass_dat,
@@ -55,8 +59,10 @@ biomass_regrowth <- biomass_long %>%
                              Aug / Jun) #Regrowth is NA if June biomass is 0
   )
 
+names(biomass_regrowth)[5:7]<-c("JunBiomass","AugBiomass","RegrowthBiomass")
+
 biomass_wide<-biomass_regrowth %>%
-  pivot_wider(values_from = c(Jun,Aug, August_regrowth),
+  pivot_wider(values_from = c(JunBiomass,AugBiomass,RegrowthBiomass),
               names_from = Fraction)
 
 #Main plot average
@@ -70,7 +76,7 @@ biomass_wide_plot<-biomass_wide %>%
 
 
 ggplot(data=biomass_regrowth[biomass_regrowth$Fraction!="TotalBiomass" & biomass_regrowth$Fraction!="Litter_Bio",]
-       ,aes(x=TreatmentID,y=August_regrowth,fill=Fraction))+
+       ,aes(x=TreatmentID,y=RegrowthBiomass,fill=Fraction))+
   geom_bar(stat="summary",fun="mean",position="dodge")+theme_bw()+
   geom_errorbar(
     stat = "summary",
@@ -260,5 +266,58 @@ setesdal_prsplant<-setesdal_plantdat %>%
   full_join(prs_wide,
             by = join_by(MainPlotID, TreatmentID))
 View(setesdal_prsplant)
+
+
+#Calculate nutrient pools
+#CNH are %
+#Others are mg or g/kg
+setesdal_prsplant$`Ca (g/kg)_Dwarf_Shrub` * (setesdal_prsplant$JunBiomass_Dwarf_Shrub/1000)
+
+library(stringr)
+library(stringr)
+
+biomass_cols <- grep("^JunBiomass_", names(setesdal_prsplant), value = TRUE)
+
+conc_cols <- grep("\\((mg|g)/kg\\)|%", names(setesdal_prsplant), value = TRUE)
+
+for (col in conc_cols) {
+  
+  frac <- str_extract(col, "Dwarf_Shrub|Graminoids|Herbs|Litter_Bio")
+  biomass_col <- paste0("JunBiomass_", frac)
+  
+  if (!biomass_col %in% names(setesdal_prsplant)) next
+  
+  # -------------------------
+  # % variables
+  # -------------------------
+  if (str_detect(col, "%")) {
+    
+    new_name <- str_replace(col, "\\(\\%\\)", "Pool_g_m2")
+    
+    setesdal_prsplant[[new_name]] <- setesdal_prsplant[[col]] * setesdal_prsplant[[biomass_col]] / 100
+  }
+  
+  # -------------------------
+  # mg/kg variables
+  # -------------------------
+  else if (str_detect(col, "\\(mg/kg\\)")) {
+    
+    new_name <- str_replace(col, "\\(mg/kg\\)", "Pool_mg_m2")
+    
+    setesdal_prsplant[[new_name]] <- setesdal_prsplant[[col]] * setesdal_prsplant[[biomass_col]] / 1000
+  }
+  
+  # -------------------------
+  # g/kg variables
+  # -------------------------
+  else if (str_detect(col, "\\(g/kg\\)")) {
+    
+    new_name <- str_replace(col, "\\(g/kg\\)", "Pool_g_m2")
+    
+    setesdal_prsplant[[new_name]] <- setesdal_prsplant[[col]] * setesdal_prsplant[[biomass_col]] / 1000
+  }
+}
+
+
 write.csv(setesdal_prsplant,"data/combined_wide_dataset.csv")
 

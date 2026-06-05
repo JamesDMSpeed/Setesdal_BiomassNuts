@@ -18,6 +18,7 @@ biomass_list<-setesdal_prsplant[,4:18]
 pointint_list<-setesdal_prsplant[,21:60]
 plantnut_list<-setesdal_prsplant[,61:136]
 prs_list<-setesdal_prsplant[,138:152]
+plantnutpool_list<-setesdal_prsplant[,153:216]
 
 #Subgroups by plant group
 herb_list<-setesdal_prsplant %>%  select(matches("herb", ignore.case = TRUE))
@@ -31,6 +32,8 @@ cor_Biomass <- cor(biomass_list, use = "pairwise.complete.obs")
 cor_Community<-cor(pointint_list,use="pairwise.complete.obs")
 cor_Nuts <- cor(plantnut_list, use = "pairwise.complete.obs")
 cor_PRS <- cor(prs_list, use = "pairwise.complete.obs")
+cor_Pools <- cor(plantnutpool_list, use = "pairwise.complete.obs")
+
 
 cor_Biomass_df <- cor_Biomass %>%
   as.data.frame() %>%
@@ -51,6 +54,12 @@ cor_Nuts_df <- cor_Nuts %>%
   filter(as.numeric(factor(Var1)) <= as.numeric(factor(Var2)))
 
 cor_PRS_df <- cor_PRS %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Var1") %>%
+  pivot_longer(-Var1, names_to = "Var2", values_to = "correlation")%>%
+  filter(as.numeric(factor(Var1)) <= as.numeric(factor(Var2)))
+
+cor_Pool_df <- cor_Pools %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Var1") %>%
   pivot_longer(-Var1, names_to = "Var2", values_to = "correlation")%>%
@@ -79,6 +88,13 @@ ggplot(cor_PRS_df, aes(x = Var2, y = Var1, fill = correlation)) +
   scale_fill_gradient2() +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(cor_Pool_df, aes(x = Var2, y = Var1, fill = correlation)) +
+  geom_tile()+ labs(x = NULL, y = NULL) +
+  scale_fill_gradient2() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
 
 #Correlations Between variable groups
 cor_df_BiomassPRS <- cor(biomass_list, prs_list, use = "pairwise.complete.obs") %>%
@@ -178,6 +194,7 @@ pheatmap(cor_PRS,
          clustering_distance_rows = as.dist(1 - cor_PRS),
          clustering_distance_cols = as.dist(1 - cor_PRS)
 )
+pheatmap(cor_Pools)
 pheatmap(cor_Gram)
 pheatmap(cor_Herb)
 pheatmap(cor_Shrub)

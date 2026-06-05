@@ -58,7 +58,7 @@ ggplot(scores, aes(PC1, PC2, color = TreatmentID)) +
 
 
 
-setesdal_ord_All<-setesdal_prsplant[,c(4:18,21:128,130:144)]
+setesdal_ord_All<-setesdal_prsplant[,c(4:18,21:136,138:216)]
 #Drop rows with some NAs (will exclude all plots without PRS etc)
 setesdal_mean_complete<-na.omit(setesdal_ord_All)
 #Now we have to remove columns with 0 point intercepts (as some species only present in plots with NA in PRS variablse)
