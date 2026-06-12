@@ -11,7 +11,8 @@ prsfig<-readRDS("figures/p_prs.rds")
 
 
 
-combinefig<-(pcaVeg / biomassfig / prsfig) | plantnuts#+
+combinefig<-((pcaVeg / biomassfig / prsfig) | plantnuts)+
+  plot_annotation(tag_levels = "A")
 #  plot_layout(widths = c(1.3,1))
 combinefig
 ggsave("figures/combfig.png",width=12,height=12,units="in")
