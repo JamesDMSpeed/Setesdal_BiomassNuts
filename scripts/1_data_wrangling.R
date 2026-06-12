@@ -18,12 +18,13 @@ biomass_dat$MainPlotID<-paste(biomass_dat$Site_id,biomass_dat$Treatment,biomass_
 
 #Add treatmentID
 biomass_dat$TreatmentID<-paste(biomass_dat$Treatment,biomass_dat$`G/NG`,sep="_")
-biomass_dat$TreatmentID<-factor(biomass_dat$TreatmentID,levels=c("Mainland_G", "Mainland_NG","Island_NG"))
+biomass_dat$TreatmentID<-factor(biomass_dat$TreatmentID,levels=c("Mainland_G", "Mainland_NG","Island_NG"),
+                                labels = c("Grazed", "Exclosure", "Island"))
 
 biomass_dat<-biomass_dat%>%
   mutate(TotalBiomass = Graminoids + Herbs+Dwarf_Shrub)
 
-biomass_dat$Month<-format(as.Date(biomass_dat$Date),"%b")
+biomass_dat$Month<-factor(format(as.Date(biomass_dat$Date),"%b"),levels=c("Jun","Aug"))
 
 #Convert from biomass per plot (0.5*0.5m) to m2
 biomass_dat$Litter_Bio<-biomass_dat$Litter_Bio*4
@@ -39,11 +40,44 @@ biomass_long<-pivot_longer(
 
 #Biomass
 ggplot(data=biomass_dat,aes(y=Litter_Bio,x = as.factor(Date)))+geom_boxplot()+facet_wrap(~TreatmentID)+theme_bw()
+pd <- position_dodge(width = 0.9)
 
+p_bio<-ggplot(data=biomass_long[biomass_long$Fraction!="TotalBiomass" ,],aes(x=TreatmentID,y=Biomass,fill=Fraction,group=Fraction))+
+    geom_bar(
+    stat = "summary",
+    fun = "mean",
+    position = pd
+  ) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    position = pd,
+    width = 0.2
+  )+facet_wrap(~Month)+
+  theme_bw()+ylab(expression(Biomass~(g~m^{-2})))+ theme(
+    legend.position = c(0.85, 0.8),
+    legend.background = element_rect(
+      fill = "white",
+      colour = "black"
+    ))+xlab("")+
+    scale_fill_manual(name=NULL,values=c(
+                        "Dwarf_Shrub" = "goldenrod",
+                      "Graminoids"  = "darkgreen",
+                      "Herbs"       = "#e41a1c",
+                      "Litter_Bio"  = "#984ea3"),
+         labels = c(
+          "Dwarf_Shrub" = "Dwarf shrubs",
+          "Graminoids"  = "Graminoids",
+          "Herbs"       = "Forbs",
+          "Litter_Bio"  = "Litter"))
+p_bio
+ggsave("figures/Biomass.png",height=6,width=8,units="in")  
+saveRDS(p_bio,"figures/p_bio.rds")
 ggplot(data=biomass_long[biomass_long$Fraction!="TotalBiomass" & biomass_long$Fraction!="Litter_Bio",],aes(x=Date,y=Biomass,fill=Fraction))+
   geom_bar(stat = "summary", fun = "mean")+facet_wrap(~TreatmentID)+theme_bw()+ylab("Biomass (g)")
 ggplot(data=biomass_long[biomass_long$Fraction!="TotalBiomass"  ,],aes(x=Date,y=Biomass,fill=Fraction))+
   geom_bar(stat = "summary", fun = "mean")+facet_wrap(~TreatmentID)+theme_bw()
+
 
 
 #Biomass proportion regrowth
@@ -116,7 +150,8 @@ plantdat$MainPlotID<-paste(plantdat$Site,plantdat$Type,plantdat$Treatment,sep="_
 
 #Add treatmentID
 plantdat$TreatmentID<-paste(plantdat$Type,plantdat$Treatment,sep="_")
-plantdat$TreatmentID<-factor(plantdat$TreatmentID,levels=c("Mainland_G", "Mainland_NG","Island_NG"))
+plantdat$TreatmentID<-factor(plantdat$TreatmentID,levels=c("Mainland_G", "Mainland_NG","Island_NG"),
+                             labels = c("Grazed", "Exclosure", "Island"))
 
 #Add species richness and diversity columns
 plantdat$species_richness<-specnumber(plantdat[,5:65])
@@ -151,7 +186,8 @@ plantnut_dat$MainPlotID<-paste(plantnut_dat$Site_id,plantnut_dat$Treatment,plant
 
 #Add treatmentID
 plantnut_dat$TreatmentID<-paste(plantnut_dat$Treatment,plantnut_dat$`G/NG`,sep="_")
-plantnut_dat$TreatmentID<-factor(plantnut_dat$TreatmentID,levels=c("Mainland_G", "Mainland_NG","Island_NG"))
+plantnut_dat$TreatmentID<-factor(plantnut_dat$TreatmentID,levels=c("Mainland_G", "Mainland_NG","Island_NG"),
+                                 labels = c("Grazed", "Exclosure", "Island"))
 
 #CN, CP and NP
 plantnut_dat$CN <- plantnut_dat$`TotC (%)`/plantnut_dat$`TotN (%)`
@@ -199,11 +235,32 @@ dim(plantnut_wide)
 summary(as.factor(plantnut_wide$MainPlotID))
 
 #Nutrients
-ggplot(data=plantnut_long,aes(y=Value,x=TreatmentID,color=`Plant-species`))+
-  geom_boxplot()+
-  facet_grid(rows=vars(Nutrient),cols=vars(`Plant-species`),scales="free_y")+
+p_nuts<-ggplot(data=plantnut_long,aes(y=Value,x=TreatmentID,color=`Plant-species`))+
+  geom_boxplot()+ scale_color_manual(name=NULL,values=c(
+    "Dwarf_Shrub" = "goldenrod",
+    "Graminoids"  = "darkgreen",
+    "Herbs"       = "#e41a1c",
+    "Litter_Bio"  = "#984ea3"))+
+   
+  facet_grid(
+    rows = vars(Nutrient),
+    cols = vars(`Plant-species`),
+    labeller = labeller(
+      `Plant-species` = c(
+        "Graminoids" = "Graminoids",
+        "Herbs" = "Forbs",
+        "Litter_Bio" = "Litter"
+      )
+    ),
+    scales = "free_y"
+  )+
   theme_bw()+theme(axis.text.x = element_text(angle=45,vjust=0.5),
-                   strip.text.y = element_text(angle = 0))
+                   strip.text.y = element_text(angle = 0),
+                   legend.position = "none")+
+  ylab("Nutrient concentration")+xlab("")
+p_nuts
+ggsave("figures/plantnutconc.png",width=8,height=12,units="in")
+saveRDS(p_nuts,"figures/p_nuts.rds")
 #ggplot(data=plantnut_long,aes(y=Value,x=Nutrient,color=`Plant-species`))+geom_boxplot()+facet_grid(rows=vars(TreatmentID),cols=vars(`Plant-species`),scales="free_y")+theme_bw()+theme(axis.text.x = element_text(angle=45,vjust=0.5))
 
 
@@ -228,7 +285,8 @@ prs_dat<-prs_dat %>%
     ))
 
 prs_dat$TreatmentID<-paste(prs_dat$Treatment,prs_dat$trt_grazing,sep="_")
-prs_dat$TreatmentID<-factor(prs_dat$TreatmentID,levels=c("Mainland_G", "Mainland_NG","Island_NG"))
+prs_dat$TreatmentID<-factor(prs_dat$TreatmentID,levels=c("Mainland_G", "Mainland_NG","Island_NG"),
+                            labels = c("Grazed", "Exclosure", "Island"))
 
 prs_dat$PlotID<-paste(prs_dat$site,prs_dat$Treatment,prs_dat$trt_grazing,prs_dat$plot,sep="_")
 prs_dat$MainPlotID<-paste(prs_dat$site,prs_dat$Treatment,prs_dat$trt_grazing,sep="_")
@@ -243,7 +301,12 @@ prs_wide<-prs_dat %>%
               id_cols=c("MainPlotID","PlotID","TreatmentID"))
 
 #PRS
-ggplot(data=prs_dat,aes(y=val,x=TreatmentID))+geom_boxplot()+facet_wrap(~nut,scales="free_y",nrow=3)+theme_bw()+ggtitle("PRS data")+theme(axis.text.x = element_text(angle=45,vjust=0.5))
+p_prs<-ggplot(data=prs_dat,aes(y=val,x=TreatmentID))+geom_boxplot()+
+  ylab(expression("Plant root simulator adsorption ("*mu*"g / 10 cm"^2*")"))+xlab("")+
+  facet_wrap(~nut,scales="free_y",ncol=4)+theme_bw()+theme(axis.text.x = element_text(angle=45,vjust=0.5))
+p_prs
+ggsave("figures/prs.png",width=8,height=6,units="in")
+saveRDS(p_prs,"figures/p_prs.rds")
 ggplot(data=prs_wide,aes(x=PRS_Ca,y=PRS_Cu,color=TreatmentID))+geom_point()+theme_bw()+scale_x_log10()+scale_y_log10()
 
 

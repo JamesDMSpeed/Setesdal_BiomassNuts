@@ -6,22 +6,30 @@ library(tidyr)
 library(dplyr)
 library(ggplot2)
 library(vegan)
+library(ggrepel)
 
 #Load data
 setesdal_prsplant<-read.csv("data/combined_wide_dataset.csv",header=TRUE)
 
 names(setesdal_prsplant)
-#PCA on all biomass
-setesdal_ord_biomass<-setesdal_prsplant[,c(4:18,21:55)]
+
+setesdal_prsplant$TreatmentID<-factor(setesdal_prsplant$TreatmentID,
+                                      levels=c("Mainland_G", "Mainland_NG","Island_NG"),
+                                    labels = c("Grazed", "Exclosure", "Island"))
+#PCA on all vegetation community
+setesdal_ord_veg<-setesdal_prsplant[,c(21:55)]
 #Drop rows with some NAs (will exclude all plots without PRS etc)
-setesdal_ord_biomass_complete<-na.omit(setesdal_ord_biomass)
+setesdal_ord_veg_complete<-na.omit(setesdal_ord_veg)
+
+#Hellinger scaling
+setesdal_hel <- decostand(setesdal_ord_veg_complete, method = "hellinger")
 
 
-pca <- prcomp(setesdal_ord_biomass_complete, scale. = TRUE)
+pca <- prcomp(setesdal_hel)
 biplot(pca)
 
 scores <- as.data.frame(pca$x)
-scores$TreatmentID <- setesdal_prsplant$TreatmentID[complete.cases(setesdal_prsplant[, names(setesdal_ord_biomass_complete)])]
+scores$TreatmentID <- setesdal_prsplant$TreatmentID[complete.cases(setesdal_prsplant[, names(setesdal_ord_veg_complete)])]
 
 ggplot(scores, aes(PC1, PC2, color = TreatmentID)) +
   geom_point(size = 3) +
@@ -30,33 +38,33 @@ ggplot(scores, aes(PC1, PC2, color = TreatmentID)) +
 loadings <- as.data.frame(pca$rotation)
 loadings$Variable <- rownames(loadings)
 
-# Scale arrows (important!)
-arrow_scale <- 10
 
 percentVar <- round(100 * (pca$sdev^2 / sum(pca$sdev^2)), 1)
 
-ggplot(scores, aes(PC1, PC2, color = TreatmentID)) +
+p_comord<-ggplot(scores, aes(PC1, PC2, color = TreatmentID)) +
   geom_point(size = 3) +
-  
   geom_segment(data = loadings,
                aes(x = 0, y = 0,
-                   xend = PC1 * arrow_scale,
-                   yend = PC2 * arrow_scale),
+                   xend = PC1,# * arrow_scale,
+                   yend = PC2),# * arrow_scale),
                arrow = arrow(length = unit(0.2, "cm")),
                inherit.aes = FALSE) +
-  
-  geom_text(data = loadings,
-            aes(x = PC1 * arrow_scale,
-                y = PC2 * arrow_scale,
-                label = Variable),
-            inherit.aes = FALSE,
-            hjust = 1.1,
-            vjust = 1.1) +
-  ggtitle("Biomass & Community")+
-  xlab(paste0("PC1 (", percentVar[1], "%)")) +  ylab(paste0("PC2 (", percentVar[2], "%)"))+
-  theme_bw()
-
-
+    geom_text_repel(
+    data = loadings,
+    aes(
+      x = PC1,# * arrow_scale,
+      y = PC2,# * arrow_scale,
+      label = Variable
+    ),size=3,segment.color = "grey50",
+    segment.size = 0.3,
+    inherit.aes = FALSE  )+
+   xlab(paste0("PC1 (", percentVar[1], "%)")) +  ylab(paste0("PC2 (", percentVar[2], "%)"))+
+  theme_bw()+theme( legend.position = c(1, 1),
+                    legend.justification = c(1, 1),
+                   legend.text=element_text(size=8),legend.background = element_rect(color="black"))+labs(color=NULL)
+p_comord
+ggsave("figures/communityord.png",height=6,width = 8,units="in")
+saveRDS(p_comord,"figures/p_comord.rds")
 
 setesdal_ord_All<-setesdal_prsplant[,c(4:18,21:136,138:216)]
 #Drop rows with some NAs (will exclude all plots without PRS etc)
