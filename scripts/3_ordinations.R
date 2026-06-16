@@ -66,6 +66,9 @@ p_comord
 ggsave("figures/communityord.png",height=6,width = 8,units="in")
 saveRDS(p_comord,"figures/p_comord.rds")
 
+
+
+#All
 setesdal_ord_All<-setesdal_prsplant[,c(4:18,21:136,138:216)]
 #Drop rows with some NAs (will exclude all plots without PRS etc)
 setesdal_mean_complete<-na.omit(setesdal_ord_All)

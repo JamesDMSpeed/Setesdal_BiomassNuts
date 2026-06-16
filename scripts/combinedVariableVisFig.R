@@ -17,3 +17,4 @@ combinefig<-((pcaVeg / biomassfig / prsfig) | plantnuts)+
 combinefig
 ggsave("figures/combfig.png",width=12,height=12,units="in")
 
+

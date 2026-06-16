@@ -382,5 +382,39 @@ for (col in conc_cols) {
 }
 
 
+#Make a long df for the pools so we can make a stacked barplot
+
+df_sub <- setesdal_prsplant %>%
+  select(TreatmentID, MainPlotID, contains("Pool"))
+
+pool_long <- df_sub %>%
+  pivot_longer(
+    cols = matches("Pool"), 
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+    extract(
+    variable,
+    into = c("element", "unit", "veg"),
+    regex = "^(.+)\\s(Pool_[^_]+_[^_]+)_(.+)$"
+    
+  )
+
+
+ggplot(pool_long, aes(x = TreatmentID, y = value, fill = veg)) +
+  geom_col(position = "stack") +
+  facet_wrap(~ element, scales = "free_y") +
+  labs(
+    x = "Treatment",
+    y = "Pool",
+    fill = "Vegetation"
+  ) +
+  theme_bw() +
+  theme(
+    strip.text = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+
 write.csv(setesdal_prsplant,"data/combined_wide_dataset.csv")
 
