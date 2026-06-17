@@ -7,6 +7,10 @@ library(dplyr)
 library(ggplot2)
 library(vegan)
 library(FactoMineR)
+library(emmeans)
+library(multcomp)
+library(multcompView)
+
 #Load data
 setesdal_prsplant<-read.csv("data/combined_wide_dataset.csv",header=TRUE)
 
@@ -20,16 +24,21 @@ names(setesdal_prsplant)
 #setesdal_prsplant[,21:55]<-decostand(setesdal_prsplant[,21:55],method="hellinger")
 #setesdal_prsplant[,c(4:18,56:136,138:152)]<-scale(setesdal_prsplant[,c(4:18,56:136,138:152)],scale=TRUE,center = TRUE)
 
-#setesdal_varselect<- setesdal_prsplant[,c(4:18,21:136,138:216)]
+#setesdal_varselect<- setesdal_prsplant[,c(4:13,21:136,138:216)]#With pools
+#setesdal_varselect<- setesdal_prsplant[,c(4:13,21:60,138:216)]#With pools, without concs
 setesdal_varselect<- setesdal_prsplant[,c(4:18,21:136,138:152)]#Without pools
 
-setesdal_scale<-data.frame(scale(setesdal_varselect))
+#setesdal_scale<-data.frame(scale(setesdal_varselect))
 
 
 
-mfa1<-MFA(setesdal_varselect,group=c(15,40,76,15),
-          name.group = c("Biomass","Community","PlantNuts","PRS"),
+mfa1<-MFA(setesdal_varselect,
+          #group=c(10,40,76,15,64),
+          #name.group = c("Biomass","Community","Nutrients","PRS","Pools"),
+          group=c(15,40,76,15),
+          name.group = c("Biomass","Community","Nutrients","PRS"),
           type=c("s","s","s","s"))#Group is number of variables in each group, here biomass, community, plant nutrients, prs
+          #type=c("s","s","s","s","s"))#Group is number of variables in each group, here biomass, community, plant nutrients, prs
          
 summary(mfa1)
 
@@ -40,8 +49,8 @@ plot(mfa1,choix="var")
 mfa1$quanti.var$coord
 
 #Describe the dimensions
-dimensvars<-dimdesc(mfa1,proba=0.05)
-
+dimensvars<-dimdesc(mfa1,proba=0.05,axes=1:5)
+dimensvars
 
 #Sites and syndromes
 scores_df <- as.data.frame(
@@ -56,7 +65,7 @@ ggplot(
       color = Treatment)
 )+
   geom_point(size = 4)+
-  theme_bw()
+    theme_bw()
 
 
 # Extract quantitative results
@@ -156,26 +165,62 @@ top_vars <- var %>%
 top_vars
 
 
-ggplot(data=scores_df_long[scores_df_long$Dimension %in% c("Dim.1","Dim.2","Dim.3","Dim.4"),],aes(x=Treatment,y=Score))+geom_point()+
-  facet_wrap(~Dimension,scales="free_y",ncol=2)+theme_bw()+scale_y_continuous(limits=c(-5,5))+
+library(dplyr)
+library(emmeans)
+
+letters_df <- scores_df_long %>%
+  filter(Dimension %in% c("Dim.1","Dim.2","Dim.3","Dim.4")) %>%
+  group_by(Dimension) %>%
+  do({
+    model <- lm(Score ~ Treatment, data = .)
+    
+    # Ensure correct reference level
+    .$Treatment <- relevel(.$Treatment, ref = "Grazed")  
+    emm <- emmeans(model, ~ Treatment)
+    
+    cld_res <- cld(
+      emm,
+      Letters = letters,
+      adjust = "none",   
+      level = 0.95          
+    )
+    
+    data.frame(
+      Treatment = cld_res$Treatment,
+      Letters = trimws(cld_res$.group),
+      y = max(.$Score, na.rm = TRUE) + 0.5
+    )
+  })
+letters_df
+
+ggplot(data=scores_df_long[scores_df_long$Dimension %in% c("Dim.1","Dim.2","Dim.3","Dim.4"),],aes(x=Treatment,y=Score))+geom_point(aes(color=Treatment))+
+  facet_wrap(~Dimension,scales="free_y",ncol=2)+theme_bw()+scale_y_continuous(limits=c(-5,5.1))+
   stat_summary(
     fun = mean,
     geom = "point",
     size = 4,
     shape = 16,
-    color = "darkblue"
-  ) +
+    aes(color =Treatment)  ) +
   stat_summary(
     fun.data = mean_se,
     geom = "errorbar",
     width = 0.2,
-    color = "darkblue"
+    aes(color = Treatment)
   ) +
   
-  # Positive loadings at top
+  geom_text(
+    data = letters_df,
+    aes(x = Treatment, y = 5.1, label = Letters),
+    inherit.aes = FALSE,
+    size = 5
+  ) +
+  
+ 
+  
+  #Sig axes -  Positive loadings at top
   geom_text(
     data = top_vars[top_vars$Dimension%in% c("Dim.1","Dim.2","Dim.3","Dim.4"),],
-    aes(x = Inf, y = 5, label = paste0(pos)),
+    aes(x = Inf, y = 4.8, label = paste0(pos)),
     hjust = 1.1,
     vjust = 1,
     inherit.aes = FALSE,
@@ -214,8 +259,9 @@ plot_mfa_arrows <- function(
     dims = list(c(1, 2), c(3, 4)),
     pval = 0.05,
     arrow_scale = 3,
-    max_arrows = NULL,   # e.g. 10 to limit clutter
-    repel = FALSE        # TRUE to use ggrepel
+    max_arrows = NULL,
+    repel = FALSE,
+    hulls = TRUE
 ) {
   library(dplyr)
   library(ggplot2)
@@ -225,19 +271,18 @@ plot_mfa_arrows <- function(
   }
   
   # --- 1. Get dimdesc results
-  dimensvars <- FactoMineR::dimdesc(mfa_obj, proba = pval,axes=1:5)
+  dimensvars <- FactoMineR::dimdesc(mfa_obj, proba = pval, axes = 1:5)
   
-  # --- 2. Build scores + arrows for each panel
+  # --- 2. Build scores + arrows
   var_coords <- as.data.frame(mfa_obj$quanti.var$coord)
   
   scores_list <- list()
   arrows_list <- list()
   eig <- mfa_obj$eig
+  
   for (i in seq_along(dims)) {
     
     d <- dims[[i]]
-    
-    
     
     panel_name <- paste0(
       "Dim ", d[1], " (", round(eig[d[1], 2], 1), "%) vs ",
@@ -255,13 +300,12 @@ plot_mfa_arrows <- function(
     
     scores_list[[i]] <- scores_tmp
     
-    # Significant vars (union of the two dims)
+    # Significant vars
     sig_vars <- union(
       rownames(dimensvars[[paste0("Dim.", d[1])]]$quanti),
       rownames(dimensvars[[paste0("Dim.", d[2])]]$quanti)
     )
     
-    # Arrow coordinates
     arrows_tmp <- var_coords[sig_vars, c(paste0("Dim.", d[1]), paste0("Dim.", d[2]))]
     
     if (nrow(arrows_tmp) == 0) next
@@ -270,14 +314,12 @@ plot_mfa_arrows <- function(
     arrows_tmp$panel <- panel_name
     colnames(arrows_tmp)[1:2] <- c("DimX", "DimY")
     
-    # Scale arrows
     arrows_tmp <- arrows_tmp %>%
       mutate(
         DimX = DimX * arrow_scale,
         DimY = DimY * arrow_scale
       )
     
-    # Optional: limit number of arrows
     if (!is.null(max_arrows)) {
       arrows_tmp <- arrows_tmp %>%
         mutate(length = sqrt(DimX^2 + DimY^2)) %>%
@@ -290,12 +332,39 @@ plot_mfa_arrows <- function(
   scores_all <- bind_rows(scores_list)
   arrows_all <- bind_rows(arrows_list)
   
-  # --- 3. Plot
-  p <- ggplot(scores_all, aes(DimX, DimY, color = Treatment)) +
-    geom_point(size = 3) +
+  # --- 3. Compute convex hulls (FIXED)
+  if (hulls) {
+    hulls_df <- scores_all %>%
+      group_by(panel, Treatment) %>%
+      filter(n() >= 3) %>%   # ✅ avoid hull errors
+      slice(chull(DimX, DimY)) %>%
+      ungroup()
+  }
+  
+  # --- 4. Base plot
+  p <- ggplot(scores_all, aes(x = DimX, y = DimY, color = Treatment)) +
     facet_wrap(~panel, scales = "free") +
-    theme_bw() +xlab("")+ylab("")+
-    
+    theme_bw() +
+    xlab("") + ylab("")
+  
+  # ✅ Add hulls FIRST (so they are behind points)
+  if (hulls && exists("hulls_df")) {
+    p <- p + geom_polygon(
+      data = hulls_df,
+      aes(
+        x = DimX,
+        y = DimY,
+        fill = Treatment,
+        group = interaction(panel, Treatment)
+      ),
+      alpha = 0.2,
+      color = NA
+    )
+  }
+  
+  # Points + arrows
+  p <- p +
+    geom_point(size = 3) +
     geom_segment(
       data = arrows_all,
       aes(x = 0, y = 0, xend = DimX, yend = DimY),
@@ -311,7 +380,7 @@ plot_mfa_arrows <- function(
       aes(x = DimX, y = DimY, label = var),
       inherit.aes = FALSE,
       size = 3,
-      segment.color="grey"
+      segment.color = "grey"
     )
   } else {
     p <- p + geom_text(
@@ -328,7 +397,6 @@ plot_mfa_arrows <- function(
 }
 
 
-
 plot_mfa_arrows(
   mfa_obj = mfa1,
   scores_df = scores_df,
@@ -339,3 +407,5 @@ plot_mfa_arrows(
   repel = TRUE
 )
 ggsave("figures/MFA_2panel.png",height=8,width=12,units="in")
+
+
